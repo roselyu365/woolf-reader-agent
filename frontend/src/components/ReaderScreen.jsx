@@ -90,7 +90,11 @@ export default function ReaderScreen({ onSerialEvent, book = 'a_room_of_ones_own
     switch (event.event) {
       case 'cursor':
         if (selectingRef.current) {
-          setSelEnd(prev => Math.min((prev ?? 0) + 1, paragraphsRef.current.length - 1))
+          // 圆筒右拉状态下，摇杆扩展/收缩选中范围
+          if (event.value === 'down')
+            setSelEnd(prev => Math.min((prev ?? cursorLineRef.current) + 1, paragraphsRef.current.length - 1))
+          if (event.value === 'up')
+            setSelEnd(prev => Math.max(selStartRef.current ?? 0, (prev ?? cursorLineRef.current) - 1))
         } else {
           if (event.value === 'up')
             setCursorLine(l => Math.max(0, l - 1))
@@ -99,30 +103,33 @@ export default function ReaderScreen({ onSerialEvent, book = 'a_room_of_ones_own
         }
         break
 
-      case 'action':
-        if (!selectingRef.current) {
-          setSelecting(true)
-          setSelStart(cursorLineRef.current)
-          setSelEnd(cursorLineRef.current)
-        } else {
-          const s = selStartRef.current
-          const e = selEndRef.current ?? s
+      case 'select_start':
+        // 圆筒左→右：进入选择模式，记录起始段落
+        setSelecting(true)
+        setSelStart(cursorLineRef.current)
+        setSelEnd(cursorLineRef.current)
+        break
+
+      case 'select_end': {
+        // 圆筒右→左：判断是否有扩展选中
+        const s = selStartRef.current
+        const e = selEndRef.current ?? s
+        if (s !== null && e > s) {
+          // 选中范围扩展过 → 确认，触发 Agent
           const passage = paragraphsRef.current.slice(s, e + 1).join(' ')
           triggerAgentUI(passage)
-          setSelecting(false)
-          setSelStart(null)
-          setSelEnd(null)
         }
-        break
-
-      case 'wake':
-        triggerAgentUI(paragraphsRef.current[cursorLineRef.current] ?? '')
-        break
-
-      case 'cancel':
+        // 否则（未扩展）→ 取消，不触发
         setSelecting(false)
         setSelStart(null)
         setSelEnd(null)
+        break
+      }
+
+      case 'action':
+      case 'wake':
+        // 空格/回车（demo）或唤醒词：对当前段落触发 AgentUI
+        triggerAgentUI(paragraphsRef.current[cursorLineRef.current] ?? '')
         break
     }
   }
@@ -140,16 +147,16 @@ export default function ReaderScreen({ onSerialEvent, book = 'a_room_of_ones_own
           // questionCount 个问题 + 1 个"加入笔记"选项
           agentSelectedIdxRef.current = Math.min(questionCount, agentSelectedIdxRef.current + 1)
         }
-        // 通知 AgentUI 更新高亮
         setAgentUI(prev => prev ? { ...prev, _tick: Date.now() } : prev)
         break
 
-      case 'action':
-        // 确认当前选项
+      case 'select_start':
+        // 圆筒右拉 → 确认当前选项
         setAgentUI(prev => prev ? { ...prev, _confirm: agentSelectedIdxRef.current } : prev)
         break
 
-      case 'cancel':
+      case 'select_end':
+        // 圆筒推回左 → 关闭 Agent UI
         agentSelectedIdxRef.current = 0
         setAgentUI(null)
         break

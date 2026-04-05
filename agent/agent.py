@@ -17,8 +17,8 @@ from dialogue_state import DiscoveryState, DialogueComplete
 
 ZHIPU_BASE = os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
 ZHIPU_KEY = os.getenv("ZHIPU_API_KEY")
-MODEL_FAST = os.getenv("ZHIPU_MODEL_FAST", "glm-4.5-air")
-MODEL_MAIN = os.getenv("ZHIPU_MODEL_MAIN", "glm-4.5")
+MODEL_FAST = os.getenv("ZHIPU_MODEL_FAST", "glm-4-flash")
+MODEL_MAIN = os.getenv("ZHIPU_MODEL_MAIN", "glm-4-plus")
 
 MAX_TOOL_ROUNDS = 10  # Safety limit: allows up to 10 tool-use rounds per request
 
@@ -236,16 +236,41 @@ class WoolfAgent:
     async def _run_annotation(
         self, user_message: str, passage: str
     ) -> AsyncGenerator[str, None]:
-        """Direct annotation — no RAG retrieval, passage is the context.
-        Skipping retrieval removes the 3-5s vector search blocking time to first token."""
+        """Annotation: fast local retrieval (no stepback) + streaming.
+        Falls back to passage-only if retrieval fails."""
         system = build_system_prompt(self.session_id, self.endpoint)
-        annotation_prompt = (
-            f"读者选中了这段文字：\n\n「{passage}」\n\n"
-            f"读者的问题：{user_message}\n\n"
-            "以Virginia Woolf的口吻直接作答，紧扣选段，2-3句。"
-            "禁止以'好的'、'当然'、'让我'、'这段'、'关于'等词开头。"
-            "第一个字就是你的回答本身。"
-        )
+
+        # Fast local retrieval — skip stepback (no API call, pure ChromaDB)
+        kb_context = ""
+        try:
+            results = await asyncio.to_thread(
+                execute_tool,
+                "retrieve_knowledge",
+                {"query": user_message, "collections": ["all"], "top_k": 4,
+                 "use_stepback": False},
+                self.cited_ids,
+            )
+            kb_context = results
+        except Exception:
+            pass  # degrade gracefully: answer from passage only
+
+        if kb_context:
+            annotation_prompt = (
+                f"读者选中了这段文字：\n\n「{passage}」\n\n"
+                f"读者的问题：{user_message}\n\n"
+                f"相关知识库内容（可引用）：\n{kb_context}\n\n"
+                "以Virginia Woolf的口吻直接作答，紧扣选段，结合知识库内容，2-3句。"
+                "禁止以'好的'、'当然'、'让我'、'这段'、'关于'等词开头。"
+                "第一个字就是你的回答本身。"
+            )
+        else:
+            annotation_prompt = (
+                f"读者选中了这段文字：\n\n「{passage}」\n\n"
+                f"读者的问题：{user_message}\n\n"
+                "以Virginia Woolf的口吻直接作答，紧扣选段，2-3句。"
+                "禁止以'好的'、'当然'、'让我'、'这段'、'关于'等词开头。"
+                "第一个字就是你的回答本身。"
+            )
         async for token in self._stream_claude(
             system=system,
             messages=[{"role": "user", "content": annotation_prompt}],

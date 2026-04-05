@@ -10,13 +10,16 @@ import os
 import json
 import asyncio
 from typing import Optional
-import anthropic
+import openai
 import networkx as nx
 from kb_client import get_client, get_embedding_function, CHROMA_DB_PATH
 from build_graph import load_graph, GRAPH_PATH
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL_FAST = os.getenv("CLAUDE_MODEL_FAST", "claude-haiku-4-5-20251001")
+client = openai.OpenAI(
+    api_key=os.getenv("ZHIPU_API_KEY"),
+    base_url=os.getenv("ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4/"),
+)
+MODEL_FAST = os.getenv("ZHIPU_MODEL_FAST", "glm-4-flash")
 
 COLLECTIONS = [
     "woolf_works",
@@ -50,17 +53,22 @@ def stepback_expand(query: str) -> list[str]:
        "伍尔夫自身意识体验与写作方式的关系"]
     """
     try:
-        resp = client.messages.create(
+        resp = client.chat.completions.create(
             model=MODEL_FAST,
             max_tokens=200,
-            system=(
-                "你是一个文学研究助手。给定一个关于弗吉尼亚·伍尔夫的问题，"
-                "生成 2-3 个更深层的搜索查询，用于检索回答该问题所需的底层知识。\n"
-                "只输出 JSON 数组，例如：[\"查询1\", \"查询2\", \"查询3\"]"
-            ),
-            messages=[{"role": "user", "content": query}],
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "你是一个文学研究助手。给定一个关于弗吉尼亚·伍尔夫的问题，"
+                        "生成 2-3 个更深层的搜索查询，用于检索回答该问题所需的底层知识。\n"
+                        "只输出 JSON 数组，例如：[\"查询1\", \"查询2\", \"查询3\"]"
+                    ),
+                },
+                {"role": "user", "content": query},
+            ],
         )
-        expanded = json.loads(resp.content[0].text.strip())
+        expanded = json.loads(resp.choices[0].message.content.strip())
         return [query] + expanded  # 原始查询 + 扩展查询
     except Exception:
         return [query]  # 失败时只用原始查询
