@@ -1,0 +1,6 @@
+## ESP-SR 依赖（WakeNet 唤醒词检测）
+dependencies:
+  espressif/esp-sr:
+    version: "^1.0.0"
+  idf:
+    version: ">=5.0.0"

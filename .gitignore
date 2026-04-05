@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Environment
+.env
+
+# Vector DB (regenerate with setup_kb.sh)
+kb/chroma/
+
+# macOS
+.DS_Store
+.superpowers/
+.pytest_cache/
+worklog/
