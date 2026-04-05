@@ -9,7 +9,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from kb_client import get_or_create_collection
+try:
+    from kb_client import get_or_create_collection
+    _KB_AVAILABLE = True
+except Exception:
+    _KB_AVAILABLE = False
+    get_or_create_collection = None
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -23,6 +28,8 @@ class NoteCreate(BaseModel):
 
 @router.post("/add")
 def add_note(note: NoteCreate):
+    if not _KB_AVAILABLE:
+        return {"status": "skipped", "id": "no-kb"}
     try:
         import time
         col = get_or_create_collection("user_notes")
@@ -43,6 +50,8 @@ def add_note(note: NoteCreate):
 
 @router.get("/{session_id}")
 def get_notes(session_id: str):
+    if not _KB_AVAILABLE:
+        return {"session_id": session_id, "notes": []}
     try:
         col = get_or_create_collection("user_notes")
         results = col.get(

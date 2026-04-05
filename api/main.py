@@ -23,9 +23,6 @@ from reader_router import router as reader_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm up embeddings on startup
-    from kb_client import get_embedding_function
-    get_embedding_function()
     yield
 
 

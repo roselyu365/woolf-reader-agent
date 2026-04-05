@@ -8,7 +8,13 @@ import os
 import time
 from pathlib import Path
 import openai
-from kb_client import get_or_create_collection
+try:
+    from kb_client import get_or_create_collection as _get_or_create_collection
+    def get_or_create_collection(name):
+        return _get_or_create_collection(name)
+except Exception:
+    def get_or_create_collection(name):
+        raise RuntimeError("ChromaDB not available")
 
 ANCHORS_PATH = Path(__file__).parent.parent / "data/persona_anchors.json"
 MODEL_FAST = os.getenv("ZHIPU_MODEL_FAST", "glm-4-flash")

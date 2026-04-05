@@ -216,13 +216,21 @@ class WoolfAgent:
                         yield char
                 break
 
-            # Execute tool calls
+            # Execute tool calls (5s timeout to avoid blocking on model download)
             for tc in assembled_tool_calls:
                 try:
                     tool_input = json.loads(tc["arguments"])
                 except json.JSONDecodeError:
                     tool_input = {}
-                result = execute_tool(tc["name"], tool_input, self.cited_ids)
+                try:
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(execute_tool, tc["name"], tool_input, self.cited_ids),
+                        timeout=5.0,
+                    )
+                except asyncio.TimeoutError:
+                    result = "Knowledge base temporarily unavailable."
+                except Exception as e:
+                    result = f"Tool error: {e}"
                 current_messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
@@ -241,14 +249,18 @@ class WoolfAgent:
         system = build_system_prompt(self.session_id, self.endpoint)
 
         # Fast local retrieval — skip stepback (no API call, pure ChromaDB)
+        # 5s timeout: if embedding model not yet downloaded, degrade gracefully
         kb_context = ""
         try:
-            results = await asyncio.to_thread(
-                execute_tool,
-                "retrieve_knowledge",
-                {"query": user_message, "collections": ["all"], "top_k": 4,
-                 "use_stepback": False},
-                self.cited_ids,
+            results = await asyncio.wait_for(
+                asyncio.to_thread(
+                    execute_tool,
+                    "retrieve_knowledge",
+                    {"query": user_message, "collections": ["all"], "top_k": 4,
+                     "use_stepback": False},
+                    self.cited_ids,
+                ),
+                timeout=5.0,
             )
             kb_context = results
         except Exception:

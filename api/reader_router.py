@@ -281,7 +281,7 @@ def get_annotated_paragraphs(session_id: str):
             if m.get("para_idx") is not None
         ]
     except Exception:
-        para_ids = []
+        para_ids = []  # ChromaDB not available, return empty
 
     return {"para_ids": para_ids}
 

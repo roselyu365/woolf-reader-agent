@@ -5,9 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/reader': 'http://localhost:8001',
-      '/notes':  'http://localhost:8001',
-      '/mobile': 'http://localhost:8001',
+      '/reader': 'http://localhost:8000',
+      '/notes':  'http://localhost:8000',
+      '/mobile': 'http://localhost:8000',
     }
   }
 })
